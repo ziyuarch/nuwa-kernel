@@ -28,13 +28,14 @@ jobs:
           cd k
           make O=out LLVM=1 ARCH=arm64 ${{ inputs.defconfig }}
           if [ -f arch/arm64/configs/vendor/nuwa_GKI.config ]; then scripts/kconfig/merge_config.sh -m -O out out/.config arch/arm64/configs/vendor/nuwa_GKI.config; fi
-          scripts/config --file out/.config -e MODULE_FORCE_LOAD -e VT -e FRAMEBUFFER_CONSOLE -e DRM_FBDEV_EMULATION -d LTO_CLANG_FULL -e LTO_CLANG_THIN --set-str LOCALVERSION ${{ inputs.localversion }}
+          scripts/config --file out/.config -d TRIM_UNUSED_KSYMS -e MODULE_FORCE_LOAD -e VT -e FRAMEBUFFER_CONSOLE -e DRM_FBDEV_EMULATION -d LTO_CLANG_FULL -e LTO_CLANG_THIN --set-str LOCALVERSION ${{ inputs.localversion }}
           make O=out LLVM=1 ARCH=arm64 olddefconfig
-          grep -E 'CONFIG_(VT|FRAMEBUFFER_CONSOLE|DRM_FBDEV_EMULATION|MODULE_FORCE_LOAD|LOCALVERSION)' out/.config || true
+          grep -E 'CONFIG_(VT|FRAMEBUFFER_CONSOLE|DRM_FBDEV_EMULATION|MODULE_FORCE_LOAD|TRIM_UNUSED_KSYMS|LOCALVERSION)' out/.config || true
       - name: build
         run: |
           cd k
-          make O=out LLVM=1 ARCH=arm64 -j$(nproc) Image 2>&1 | tail -60
+          mkdir -p gki && touch gki/abi_symbollist.raw
+          make O=out LLVM=1 ARCH=arm64 -j$(nproc) Image 2>&1 | tail -80
           ls -la out/arch/arm64/boot/
       - name: pack
         run: |
