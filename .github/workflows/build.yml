@@ -1,0 +1,48 @@
+name: build-nuwa-kernel
+on:
+  workflow_dispatch:
+    inputs:
+      defconfig:
+        default: kalama-gki_stock_defconfig
+      localversion:
+        default: -nuwa-port
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+      - name: fetch source
+        run: |
+          git clone --depth=1 https://github.com/Rohail33/Realking_kernel_sm8550.git k
+          echo ROOT; ls k/
+          echo CONFIGS; ls k/arch/arm64/configs/ || true
+          echo VENDOR_CONFIGS; ls k/arch/arm64/configs/vendor/ || true
+      - name: deps
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq build-essential bc bison flex libssl-dev libelf-dev python3 curl rsync zip unzip cpio device-tree-compiler ccache kmod lz4 zstd libncurses-dev clang lld llvm
+          clang --version
+      - name: config
+        run: |
+          cd k
+          make O=out LLVM=1 ARCH=arm64 ${{ inputs.defconfig }}
+          if [ -f arch/arm64/configs/vendor/nuwa_GKI.config ]; then scripts/kconfig/merge_config.sh -m -O out out/.config arch/arm64/configs/vendor/nuwa_GKI.config; fi
+          scripts/config --file out/.config -e MODULE_FORCE_LOAD -e VT -e FRAMEBUFFER_CONSOLE -e DRM_FBDEV_EMULATION -d LTO_CLANG_FULL -e LTO_CLANG_THIN --set-str LOCALVERSION ${{ inputs.localversion }}
+          make O=out LLVM=1 ARCH=arm64 olddefconfig
+          grep -E 'CONFIG_(VT|FRAMEBUFFER_CONSOLE|DRM_FBDEV_EMULATION|MODULE_FORCE_LOAD|LOCALVERSION)' out/.config || true
+      - name: build
+        run: |
+          cd k
+          make O=out LLVM=1 ARCH=arm64 -j$(nproc) Image 2>&1 | tail -60
+          ls -la out/arch/arm64/boot/
+      - name: pack
+        run: |
+          python3 repack.py k/out/arch/arm64/boot/Image boot.img
+          sha256sum boot.img
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nuwa-boot
+          path: |
+            boot.img
+            k/out/.config
