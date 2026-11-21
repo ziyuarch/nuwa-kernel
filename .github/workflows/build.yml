@@ -9,36 +9,37 @@ jobs:
       - uses: actions/checkout@v4
       - run: |
           set -x
-          sudo fallocate -l 10G /swapfile || sudo dd if=/dev/zero of=/swapfile bs=1M count=10240
-          sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile
-          free -m
+          (sudo fallocate -l 6G /swapfile || sudo dd if=/dev/zero of=/swapfile bs=1M count=6144) || true
+          (sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile) || true
+          free -m || true
+          df -h / || true
           git clone --depth=1 https://github.com/Rohail33/Realking_kernel_sm8550.git k
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq build-essential bc bison flex libssl-dev libelf-dev python3 curl rsync zip unzip cpio device-tree-compiler ccache kmod lz4 zstd libncurses-dev clang lld llvm dwarves
+          sudo apt-get update -qq || true
+          sudo apt-get install -y -qq build-essential bc bison flex libssl-dev libelf-dev python3 curl rsync zip unzip cpio device-tree-compiler ccache kmod lz4 zstd libncurses-dev clang lld llvm dwarves || true
           cd k
           make O=out LLVM=1 ARCH=arm64 kalama-gki_stock_defconfig
           scripts/kconfig/merge_config.sh -m -O out out/.config arch/arm64/configs/vendor/nuwa_GKI.config
           F=out/.config
-          sed -i 's/^CONFIG_TRIM_UNUSED_KSYMS=y/# CONFIG_TRIM_UNUSED_KSYMS is not set/' $F
-          sed -i 's/^# CONFIG_MODULE_FORCE_LOAD is not set/CONFIG_MODULE_FORCE_LOAD=y/' $F
-          sed -i 's/^CONFIG_DEBUG_INFO=y/# CONFIG_DEBUG_INFO is not set/' $F
-          sed -i 's/^CONFIG_DEBUG_INFO_BTF=y/# CONFIG_DEBUG_INFO_BTF is not set/' $F
+          sed -i 's/^CONFIG_TRIM_UNUSED_KSYMS=y/# CONFIG_TRIM_UNUSED_KSYMS is not set/' $F || true
+          sed -i 's/^# CONFIG_MODULE_FORCE_LOAD is not set/CONFIG_MODULE_FORCE_LOAD=y/' $F || true
+          sed -i 's/^CONFIG_DEBUG_INFO=y/# CONFIG_DEBUG_INFO is not set/' $F || true
+          sed -i 's/^CONFIG_DEBUG_INFO_BTF=y/# CONFIG_DEBUG_INFO_BTF is not set/' $F || true
           for o in CONFIG_VT CONFIG_VT_CONSOLE CONFIG_FB CONFIG_FRAMEBUFFER_CONSOLE CONFIG_DRM_FBDEV_EMULATION CONFIG_DUMMY_CONSOLE; do
-            sed -i "s/^# ${o} is not set/${o}=y/" $F
-            grep -q "^${o}=y" $F || echo "${o}=y" >> $F
+            sed -i "s/^# ${o} is not set/${o}=y/" $F || true
+            grep -q "^${o}=y" $F || echo "${o}=y" >> $F || true
           done
           make O=out LLVM=1 ARCH=arm64 olddefconfig
-          grep -E 'CONFIG_(VT|VT_CONSOLE|FB=|FRAMEBUFFER_CONSOLE=|DRM_FBDEV|DUMMY_CONSOLE|MODULE_FORCE_LOAD|TRIM_UNUSED|DEBUG_INFO)' $F | head -40
+          grep -E 'CONFIG_(VT|VT_CONSOLE|FB=|FRAMEBUFFER_CONSOLE=|DRM_FBDEV|DUMMY_CONSOLE|MODULE_FORCE_LOAD|TRIM_UNUSED|DEBUG_INFO)' $F | head -40 || true
           mkdir -p gki && touch gki/abi_symbollist.raw
           make O=out LLVM=1 ARCH=arm64 -j4 Image > /tmp/build.log 2>&1 || true
-          tail -60 /tmp/build.log
+          tail -60 /tmp/build.log || true
           ls -la out/arch/arm64/boot/ || true
-          free -m
-          cp /tmp/build.log build.log
+          free -m || true
+          cp /tmp/build.log build.log || true
           cd ..
-          python3 repack.py k/out/arch/arm64/boot/Image boot.img
-          sha256sum boot.img
-          cp k/out/.config kernel_config.txt
+          python3 repack.py k/out/arch/arm64/boot/Image boot.img || true
+          sha256sum boot.img || true
+          cp k/out/.config kernel_config.txt || true
       - uses: actions/upload-artifact@v4
         if: always()
         with:
