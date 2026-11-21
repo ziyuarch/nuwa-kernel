@@ -12,20 +12,32 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq build-essential bc bison flex libssl-dev libelf-dev python3 curl rsync zip unzip cpio device-tree-compiler ccache kmod lz4 zstd libncurses-dev clang lld llvm dwarves
           cd k
-          make O=out LLVM=1 ARCH=arm64 kalama-gki_stock_defconfig
+          make O=out LLVM=1 ARCH=arm64 kalama-gki_stock_defconfig || exit 1
           scripts/kconfig/merge_config.sh -m -O out out/.config arch/arm64/configs/vendor/nuwa_GKI.config
-          scripts/config --file out/.config -d TRIM_UNUSED_KSYMS -e MODULE_FORCE_LOAD -e VT -e FRAMEBUFFER_CONSOLE -e DRM_FBDEV_EMULATION -d LTO_CLANG_FULL -e LTO_CLANG_THIN --set-str LOCALVERSION -nuwa-port
+          F=out/.config
+          sed -i 's/^CONFIG_TRIM_UNUSED_KSYMS=y/# CONFIG_TRIM_UNUSED_KSYMS is not set/' $F
+          sed -i 's/^# CONFIG_MODULE_FORCE_LOAD is not set/CONFIG_MODULE_FORCE_LOAD=y/' $F
+          sed -i 's/^# CONFIG_VT is not set/CONFIG_VT=y/' $F
+          for o in CONFIG_VT_CONSOLE CONFIG_FB CONFIG_FRAMEBUFFER_CONSOLE CONFIG_DRM_FBDEV_EMULATION CONFIG_DUMMY_CONSOLE; do
+            sed -i "s/^# ${o} is not set/${o}=y/" $F
+            grep -q "^${o}=y" $F || echo "${o}=y" >> $F
+          done
+          echo '=== BEFORE OLDDEFCONFIG ==='
+          grep -E 'CONFIG_(VT|VT_CONSOLE|FB|FRAMEBUFFER_CONSOLE|DRM_FBDEV|DUMMY_CONSOLE|MODULE_FORCE_LOAD|TRIM_UNUSED)' $F || true
           make O=out LLVM=1 ARCH=arm64 olddefconfig
-          grep -E 'CONFIG_(VT|FB_|FBDEV|MODULE_FORCE|TRIM_UNUSED|LOCALVERSION)' out/.config || true
+          echo '=== AFTER OLDDEFCONFIG ==='
+          grep -E 'CONFIG_(VT|VT_CONSOLE|FB|FRAMEBUFFER_CONSOLE|DRM_FBDEV|DUMMY_CONSOLE|MODULE_FORCE_LOAD|TRIM_UNUSED)' $F || true
           mkdir -p gki && touch gki/abi_symbollist.raw
-          make O=out LLVM=1 ARCH=arm64 -j$(nproc) Image 2>&1 | tail -80
+          make O=out LLVM=1 ARCH=arm64 -j$(nproc) Image 2>&1 | tail -40
           ls -la out/arch/arm64/boot/
           cd ..
+          cp k/out/.config kernel_config.txt
           python3 repack.py k/out/arch/arm64/boot/Image boot.img
-          sha256sum boot.img
+          ls -la boot.img
+          sha256sum boot.img kernel_config.txt
       - uses: actions/upload-artifact@v4
         with:
           name: nuwa-boot
           path: |
             boot.img
-            k/out/.config
+            kernel_config.txt
